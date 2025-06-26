@@ -1,0 +1,8 @@
+MODEL_NAME = "efficientnetv2_s"
+DATASET_PATH = "dataset"
+TRAIN_PATH = f"{DATASET_PATH}/train"
+VAL_PATH = f"{DATASET_PATH}/val"
+BATCH_SIZE = 16
+IMG_SIZE = 224
+EPOCH_NUM = 15
+LEARNING_RATE = .001

@@ -16,15 +16,6 @@ print(f"Using device: {device}")
 
 # Step 1: Load and Prepare Data
 def prepare_data(data_dir='./dataset', batch_size=32):
-    """
-    Prepare training and validation datasets with augmentation
-    Args:
-        data_dir (str): Directory to store/download datasets
-        batch_size (int): Batch size for dataloaders
-    Returns:
-        train_loader, val_loader: DataLoader instances
-        num_classes: Number of classes in dataset
-    """
     # For this example, we'll use CIFAR-10 (change to your dataset)
     train_dataset = datasets.CIFAR10(
         root=data_dir,
@@ -59,20 +50,11 @@ def prepare_data(data_dir='./dataset', batch_size=32):
 
 # Step 2: Create Model
 def create_model(num_classes=10, pretrained=True):
-    """
-    Create EfficientNetV2 model with optional pretrained weights
-    Args:
-        num_classes (int): Number of output classes
-        pretrained (bool): Use pretrained weights
-    Returns:
-        model: Configured EfficientNetV2 model
-    """
     # List available EfficientNetV2 models in timm
-    print("Available EfficientNetV2 models in timm:")
-    for model_name in timm.list_models('efficientnetv2*'):
-        print(f" - {model_name}")
+    # print("Available EfficientNetV2 models in timm:")
+    # for model_name in timm.list_models('efficientnetv2*'):
+    #     print(f" - {model_name}")
     
-    # We'll use efficientnetv2_s (small version) - you can try others
     model_name = 'efficientnetv2_rw_s'
     
     # Create model
@@ -103,7 +85,7 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=0.001):
         correct = 0
         total = 0
         
-        # Training loop with progress bar
+        ## Training loop with progress bar
         train_iter = tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs} [Train]')
         for inputs, labels in train_iter:
             inputs, labels = inputs.to(device), labels.to(device)
@@ -140,7 +122,7 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=0.001):
         train_losses.append(train_loss)
         train_accs.append(train_acc)
         
-        # Validation
+        ## Validation
         model.eval()
         val_loss = 0.0
         correct = 0
@@ -169,7 +151,7 @@ def train_model(model, train_loader, val_loader, epochs=10, lr=0.001):
         val_losses.append(val_loss)
         val_accs.append(val_acc)
         
-        print(f'Epoch {epoch+1}/{epochs}: '
+        print(f'===> Epoch {epoch+1}/{epochs}: '
               f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | '
               f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%')
     
