@@ -12,7 +12,8 @@ import torch.nn.functional as F
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # Create directory for checkpoints if it doesn't exist
-os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+if not os.path.exists(CHECKPOINT_DIR):
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
 def get_data_loader():
     train_transformer = transforms.Compose([
@@ -36,17 +37,9 @@ def get_data_loader():
     train_ds = datasets.ImageFolder(f"{TRAIN_PATH}", train_transformer)
     val_ds = datasets.ImageFolder(f"{VAL_PATH}", val_transformer)
 
-    class_to_idx = train_ds.class_to_idx
     return (DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True),
             DataLoader(val_ds, batch_size=BATCH_SIZE, shuffle=False),
-            class_to_idx)
-
-def one_hot_encoded(labels, num_class):
-    return F.one_hot(labels, num_class).float()
-
-def save_checkpoint(state, filename="checkpoint.pt"):
-    torch.save(state, os.path.join(CHECKPOINT_DIR, filename))
-    print(f"Checkpoint saved to {filename}")
+            train_ds.class_to_idx)
 
 def create_model(num_classes):
     try:
@@ -56,33 +49,34 @@ def create_model(num_classes):
     except Exception as e:
         print(f"Err loading model:{e}")
 
-def train_model(model, train_loader, val_loader, epochs=EPOCH_NUM, lr=.001):
-    
+def one_hot_encoded(labels, num_class):
+    return F.one_hot(labels, num_class).float()
+
+def save_checkpoint(state, filename):
+    torch.save(state, os.path.join(CHECKPOINT_DIR, filename))
+    print(f"Checkpoint saved to {filename}")
+
+def train_model(train_loader, val_loader, epochs=EPOCH_NUM):
     model = create_model(num_classes)
-
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-4)
+    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     # Learning rate scheduler
-    scheduler = optim.lr_scheduler.OneCycleLR(
-        optimizer,
-        max_lr=lr,
-        steps_per_epoch=len(train_loader),
-        epochs=EPOCH_NUM,
-        pct_start=0.1
-    )
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     # Track metrics
-    train_losses = []
-    val_losses = []
-    train_accs = []
-    val_accs = []
-
     best_val_acc = 0.0  # Track best validation accuracy
+    history = {
+        'train_loss': [],
+        'val_loss': [],
+        'train_acc': [],
+        'val_acc': [],
+    }
 
     for epoch in range (epochs):
         # Training phase:
         model.train()
         running_loss = 0.0
-        correct, total = 0
+        correct = 0
+        total = 0
 
         train_iter = tqdm(train_loader, desc=f"Epoch {epoch+1}/{epochs} [Train]")
         for inputs, labels in train_iter:
@@ -95,7 +89,7 @@ def train_model(model, train_loader, val_loader, epochs=EPOCH_NUM, lr=.001):
             # Backward
             loss.backward()
             optimizer.step()
-            
+
             # Track statistic
             running_loss += loss.item()
             _, predicted = outputs.max(1)
@@ -105,22 +99,22 @@ def train_model(model, train_loader, val_loader, epochs=EPOCH_NUM, lr=.001):
             # Update progress bar
             train_iter.set_postfix({
                 'loss': running_loss/(train_iter.n +1),
-                'acc': 100.0 * (correct/total)
+                'acc': 100.0 * (correct/total),
             })
-
         # Update learning rate
         scheduler.step()
 
         # Calculate training metrics
         train_loss = running_loss / len(train_loader)
-        train_acc = (correct/total) * 100.0
-        train_losses.append(train_loss)
-        train_accs.append(train_acc)
+        train_acc = 100.0 * (correct / total)
+        history['train_loss'].append(train_loss)
+        history['train_acc'].append(train_acc)
 
-        ## Validation
+        ## Validation phase
         model.eval()
         val_loss = 0.0
-        correct, total = 0, 0
+        correct = 0
+        total = 0
 
         with torch.no_grad():
             val_iter = tqdm(val_loader, desc=f"Epoch {epoch+1}/{epochs} [Val]")
@@ -142,8 +136,8 @@ def train_model(model, train_loader, val_loader, epochs=EPOCH_NUM, lr=.001):
         # Calculate validation metrics
         val_loss = val_loss/ len(val_loader)
         val_acc = (correct/total) * 100.0
-        val_accs.append(val_acc)
-        val_losses.append(val_loss)
+        history['val_loss'].append(val_loss)
+        history['val_acc'].append(val_acc)
 
         print(f'===> Epoch {epoch+1}/{epochs}: '
             f'Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}% | '
@@ -154,10 +148,8 @@ def train_model(model, train_loader, val_loader, epochs=EPOCH_NUM, lr=.001):
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
             'optimizer': optimizer.state_dict(),
-            'train_loss': train_loss,
-            'val_loss': val_loss,
-            'train_acc': train_acc,
-            'val_acc': val_acc,
+            'scheduler': scheduler.state_dict(),
+            'history': history,
             'class_to_idx': cls_to_idx
         }, filename="last.pt")
 
@@ -166,53 +158,71 @@ def train_model(model, train_loader, val_loader, epochs=EPOCH_NUM, lr=.001):
             best_val_acc = val_acc
             save_checkpoint({
                 'epoch': epoch + 1,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'train_loss': train_loss,
-                'val_loss': val_loss,
-                'val_acc': val_acc,
-                'train_acc': train_acc,
-            }, filename = 'best_model.pt')
+                'state_dict': model.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+                'history': history,
+                'class_to_idx': cls_to_idx,
+                'best_val_acc': best_val_acc,
+            }, filename = 'best.pt')
             print(f"New best model saved with val_acc: {val_acc:.2f}%")
         # ==============================
 
-        
-    return train_losses, val_losses, train_accs, val_accs
+    # # Save final model after training completed
+    # final_model_path = os.path.join(CHECKPOINT_DIR, 'final.pt')
+    # torch.save({
+    #     'state_dict': model.state_dict(),
+    #     'class_to_idx': cls_to_idx,
+    #     'history': history
+    # }, final_model_path)
+    # print(f"Final model saved to {final_model_path}")
+    return history
+    # return train_losses, val_losses, train_accs, val_accs
 
 def load_checkpoint(filename="best.pt"):
+    """Load a training checkpoint"""
     checkpoint_path = os.path.join(CHECKPOINT_DIR, filename)
-    if os.path.exists(checkpoint_path):
-        checkpoint = torch.load(checkpoint_path)
-        model = create_model(num_classes=len(checkpoint['class_to_idx']))
-        model.load_state_dict(checkpoint['state_dict'])
-        model.to(DEVICE)
-        return model, checkpoint
-    else:
+    if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"No checkpoint found at {checkpoint_path}")
+    
+    checkpoint = torch.load(checkpoint_path)
+    model = create_model(num_classes=len(checkpoint['class_to_idx'])).to(DEVICE)
+    model.load_state_dict(checkpoint['state_dict'])
 
-def plot_metrics(train_losses, val_losses, train_accs, val_accs):
+    # ========== Restore optimizer and scheduler if present
+    if 'optimizer' in checkpoint and 'scheduler' in checkpoint:
+        optimizer = optim.AdamW(model.parameters())
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=EPOCH_NUM)
+        scheduler.load_state_dict(checkpoint['scheduler'])
+        return model, checkpoint, optimizer, scheduler
+    # =========================
+    return model, checkpoint
+
+def plot_metrics(history):
     """Plot training and validation metrics"""
-    plt.figure(figsize=(12, 4))
+    plt.figure(figsize=(18, 6))
     
     # Loss plot
-    plt.subplot(1, 2, 1)
-    plt.plot(train_losses, label='Train Loss')
-    plt.plot(val_losses, label='Val Loss')
+    plt.subplot(1, 3, 1)
+    plt.plot(history['train_loss'], label='Train Loss')
+    plt.plot(history['val_loss'], label='Val Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.legend()
     plt.title('Loss over Epochs')
     
     # Accuracy plot
-    plt.subplot(1, 2, 2)
-    plt.plot(train_accs, label='Train Acc')
-    plt.plot(val_accs, label='Val Acc')
+    plt.subplot(1, 3, 2)
+    plt.plot(history['train_acc'], label='Train Acc')
+    plt.plot(history['val_acc'], label='Val Acc')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy (%)')
     plt.legend()
     plt.title('Accuracy over Epochs')
     
     plt.tight_layout()
+    plt.savefig(os.path.join(CHECKPOINT_DIR, 'training_metrics.png'))
     plt.show()
 
 if __name__ == "__main__":
@@ -220,8 +230,10 @@ if __name__ == "__main__":
     num_classes =len(cls_to_idx)
 
     # Train the model
-    train_losses, val_losses, train_accs, val_accs = train_model(
-        train_loader, val_loader, num_classes)
+    history = train_model(train_loader, val_loader, num_classes)
     
     # Plot and save metrics
-    plot_metrics(train_losses, val_losses, train_accs, val_accs)
+    plot_metrics(history)
+    print("\nTraining completed!")
+    print(f"Best model saved to: {os.path.join(CHECKPOINT_DIR, 'best.pt')}")
+    print(f"Last model saved to: {os.path.join(CHECKPOINT_DIR, 'last.pt')}")
