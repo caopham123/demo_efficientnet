@@ -2,6 +2,7 @@ import os
 MODEL_NAME = "tf_efficientnetv2_s"
 DATASET_PATH = "dataset"
 CHECKPOINT_DIR = "checkpoints"
+MODEL_DIR = "model"
 TRAIN_PATH = os.path.join(DATASET_PATH, "train")
 VAL_PATH = os.path.join(DATASET_PATH, "val")
 
