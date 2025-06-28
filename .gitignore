@@ -36,6 +36,7 @@ MANIFEST
 dataset
 *.zip
 model
+checkpoints
 data
 # Installer logs
 pip-log.txt
