@@ -1,5 +1,5 @@
 from ultralytics import YOLO
-import cv2, os
+import cv2, os, numpy
 import torch
 import timm
 import torch.nn as nn
@@ -9,7 +9,7 @@ import time
 from setting import MODEL_DETECTION, CONF_DETECT_THRESH, SKIP_FRAME
 from goods_classification import load_model_classification, get_class_name, preprocess_image
 
-MARGIN = 50
+MARGIN = 20
 model_file = os.path.join(MODEL_DETECTION, "best.pt")
 
 model_detection = YOLO(model_file.replace('\\', '/'))
@@ -60,9 +60,6 @@ def real_time_video(url, iterval = 0.1):
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     frame_order = 0
 
-    # cv2.namedWindow('Phan loai hang hoa', cv2.WINDOW_NORMAL)
-    # cv2.resizeWindow('Phan loai hang hoa', 600, 400)
-
     if not cap.isOpened():
         print("Not play video")
         return None
@@ -78,35 +75,59 @@ def real_time_video(url, iterval = 0.1):
         # Processing a frame
         print(f"\n\n==============\n Frame {frame_order}")
         h, w = pic.shape[:2]
+        w_begin = int(w/4)
+        w_end = int(w* 0.9) + MARGIN
+        print(f"line {w_begin}-{w_end}")
         display_pic = pic.copy()
+        cv2.line(display_pic, (w_begin, 0), (w_begin, h), (0,255,255),2)
+        cv2.line(display_pic, (w_end, 0), (w_end, h), (0,255,255),2)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = .7
+        thickness = 2
 
         results = model_detection(pic)
-        masks = results[0].boxes.conf > CONF_DETECT_THRESH
-        filtered_boxes = results[0].boxes[masks]
+        confidiences = results[0].boxes.conf
 
-        for i, box in enumerate(filtered_boxes):
-            print(f"    ======\n  Box conf {i}. of frame {frame_order}")
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            print(f"x1, y1, x2, y2 {x1, y1, x2, y2}")
-            
-            # Get class_name for ROI container
-            cls_id = int(box.cls[0])
-            label_container = translate_label(cls_id)
-            conf_detection = float(box.conf[0])
+        max_idx = 0
+        for idx in range (len(confidiences)):
+            print(f"idx {idx} - {confidiences[idx]}")
+            if confidiences[idx] > confidiences[max_idx] and confidiences[idx] > CONF_DETECT_THRESH:
+                max_idx = idx
+        print(f"idx: {max_idx} - {confidiences[max_idx]}")
+        max_bbox = results[0].boxes[max_idx]
 
-            # Draw bounding box
-            cv2.rectangle(display_pic, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            x1 = max(0, x1 - MARGIN)
-            y1 = max(0, y1 - MARGIN)
-            x2 = min(w, x2 + MARGIN)
-            y2 = min(h, y2 + MARGIN)
-            cropped_pic = pic[y1: y2, x1: x2]
+        # for i, box in enumerate(filtered_boxes):
+        # =================================
+        print(f"    ======\n  Frame {frame_order}")
+        x1, y1, x2, y2 = map(int, max_bbox.xyxy[0])
+        print(f"x1, y1, x2, y2 {x1, y1, x2, y2}")
+        
+        # Get class_name for ROI container
+        cls_id = int(max_bbox.cls[0])
+        label_container = translate_label(cls_id)
+        conf_detection = float(max_bbox.conf[0])
 
-            if cropped_pic.size == 0: 
-                print("Warning: Empty crop detected!")
-                continue            
-            
+        # Draw bounding box
+        cv2.rectangle(display_pic, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        x1 = max(0, x1 - MARGIN)
+        y1 = max(0, y1 - MARGIN)
+        x2 = min(w, x2 + MARGIN)
+        y2 = min(h, y2 + MARGIN)
+        cropped_pic = pic[y1: y2, x1: x2]
+
+        if cropped_pic.size == 0: 
+            print("Warning: Empty crop detected!")
+            continue            
+        if label_container == "het hang":
+            cv2.putText(display_pic, label_container, (x1, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness) 
+            continue
+
+
+        if x1 >= w_begin and x2 >= w_end : 
+            print(f"w4/x1: {w_begin}/{x1}")
+
             # Image classification
+            print(f"    ========BEGIN CLASSIFY==========")
             pil_img = Image.fromarray(cv2.cvtColor(cropped_pic, cv2.COLOR_BGR2RGB))
             input_tensor = preprocess_image(pil_img)
             # Inference
@@ -118,20 +139,16 @@ def real_time_video(url, iterval = 0.1):
             # Get class name and confidence
             goods_name = get_class_name(best_class.item(), class_to_idx)
             conf_goods = round(best_prob.item()*100., 2)
-            label_goods = f"{goods_name}: {conf_goods}%"
+            label_goods = f"{goods_name}: {conf_goods}%" if label_container != "het hang" else ""
             print(f"label_classification: {label_goods}")
 
             # Display prediction on frame
-            font = cv2.FONT_HERSHEY_SIMPLEX
-            font_scale = 1.2
-            thickness = 2
-            margin = 20
-            (label_w, label_h), _ = cv2.getTextSize(label_goods, font, font_scale, thickness)
-            x = w - label_w - margin
-            y = label_h + margin
-            cv2.putText(display_pic, label_container, (margin, y), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
-            cv2.putText(display_pic, label_goods, (x, y), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
-
+            (label_w,_), _ = cv2.getTextSize(label_goods, font, font_scale, thickness)
+            cv2.putText(display_pic, label_container, (x1, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
+            cv2.putText(display_pic, label_goods, (x2 - label_w, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
+            print ("        =========END CLASSIFY============")
+            # ===========================
+        
         # Display the resulting frame
         resized_pic = cv2.resize(display_pic, (600, 400))
         cv2.imshow('Classify goods', resized_pic)
@@ -139,6 +156,9 @@ def real_time_video(url, iterval = 0.1):
         ## After for loop
         process_time = time.perf_counter() - last_time
         remain_time = max(0, iterval - process_time)
+        print(f"pro_time: {process_time}")
+        print(f"remain_time: {remain_time}")
+
         if remain_time > 0:
             key = cv2.waitKey(int(remain_time*1000))
         else:
