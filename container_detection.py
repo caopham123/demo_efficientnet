@@ -63,6 +63,7 @@ def real_time_video(url, iterval = 0.1):
     if not cap.isOpened():
         print("Not play video")
         return None
+    
     while cap.isOpened():
         last_time = time.perf_counter()
         ret, pic = cap.read()
@@ -72,7 +73,8 @@ def real_time_video(url, iterval = 0.1):
             frame_order += 1
             continue
             
-        # Processing a frame
+    ### =========== BEGIN PROCESSING FRAME ==============
+        # ======   CONFIGURE    ===========
         print(f"\n\n==============\n Frame {frame_order}")
         h, w = pic.shape[:2]
         w_begin = int(w/4)
@@ -85,22 +87,24 @@ def real_time_video(url, iterval = 0.1):
         font_scale = .7
         thickness = 2
 
+        # ======   LOAD DETECTION MODEL    ===========
         results = model_detection(pic)
         confidiences = results[0].boxes.conf
 
+        # ====== FOUND THE BBOX WITH MAX CONFIDIENCE ===========
         max_idx = 0
-        for idx in range (len(confidiences)):
-            print(f"idx {idx} - {confidiences[idx]}")
+        num_confidiences = len(confidiences)
+        print(f"num_confd: {num_confidiences}")
+        if num_confidiences == 0: continue
+
+        for idx in range (num_confidiences):
+            print(f"    idx: {idx} - {confidiences[idx]}")
             if confidiences[idx] > confidiences[max_idx] and confidiences[idx] > CONF_DETECT_THRESH:
                 max_idx = idx
-        print(f"idx: {max_idx} - {confidiences[max_idx]}")
         max_bbox = results[0].boxes[max_idx]
-
-        # for i, box in enumerate(filtered_boxes):
-        # =================================
-        print(f"    ======\n  Frame {frame_order}")
         x1, y1, x2, y2 = map(int, max_bbox.xyxy[0])
         print(f"x1, y1, x2, y2 {x1, y1, x2, y2}")
+        # =================================
         
         # Get class_name for ROI container
         cls_id = int(max_bbox.cls[0])
@@ -114,20 +118,27 @@ def real_time_video(url, iterval = 0.1):
         x2 = min(w, x2 + MARGIN)
         y2 = min(h, y2 + MARGIN)
         cropped_pic = pic[y1: y2, x1: x2]
-
         if cropped_pic.size == 0: 
             print("Warning: Empty crop detected!")
             continue            
+
+        # ===== PROCESS IN CASE OF EMPTY CONTAINER ==========
         if label_container == "het hang":
             cv2.putText(display_pic, label_container, (x1, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness) 
             continue
 
-
+        # ===== PROCESS IN CASE OF NOT EMPTY CONTAINER ==========
+        # Requirement:
+        # 1. If edges's container over line w_begin and w_end
+        # Beginning Image Classification
+        # 2. After classification, hold 6-10 frames to get certain result (label_score)
+        #
+        #
         if x1 >= w_begin and x2 >= w_end : 
             print(f"w4/x1: {w_begin}/{x1}")
 
             # Image classification
-            print(f"    ========BEGIN CLASSIFY==========")
+            print(f"  ======== BEGIN CLASSIFICATION =========")
             pil_img = Image.fromarray(cv2.cvtColor(cropped_pic, cv2.COLOR_BGR2RGB))
             input_tensor = preprocess_image(pil_img)
             # Inference
@@ -146,8 +157,8 @@ def real_time_video(url, iterval = 0.1):
             (label_w,_), _ = cv2.getTextSize(label_goods, font, font_scale, thickness)
             cv2.putText(display_pic, label_container, (x1, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
             cv2.putText(display_pic, label_goods, (x2 - label_w, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
-            print ("        =========END CLASSIFY============")
-            # ===========================
+            print(f"  ======== END CLASSIFICATION =========")
+        # ===========================
         
         # Display the resulting frame
         resized_pic = cv2.resize(display_pic, (600, 400))
@@ -166,7 +177,7 @@ def real_time_video(url, iterval = 0.1):
         
         if key == ord('q'): break
         frame_order += 1
-
+    ### ========== END PROCESSING FRAME =============
     cap.release()
     cv2.destroyAllWindows()
 
@@ -212,8 +223,7 @@ def detect_container_video(url):
     # return resized_pic, cropped_pic, cls_name
 
 if __name__ == "__main__":
-    # real_time_video("rtsp://admin:longson2016@192.168.10.26:1555/Streaming/Channels/5002")
-    real_time_video("./data/video_01.mp4")
-    # detect_container_video("./data/video_01.mp4")
-
-    # url_input = detect_container_img("./data/img01.jpg")
+    real_time_video("rtsp://admin:longson2016@192.168.10.26:1555/Streaming/Channels/5002")
+    # real_time_video("./data/video_03.mp4")
+    
+    # detect_container_video("./data/video_02.mp4")
