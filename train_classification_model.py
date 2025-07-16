@@ -11,7 +11,7 @@ from setting import *
 import torch.nn.functional as F
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-# Create directory for checkpoints if it doesn't exist
+
 if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
@@ -56,7 +56,7 @@ def save_checkpoint(state, filename):
     torch.save(state, os.path.join(CHECKPOINT_DIR, filename))
     print(f"Checkpoint saved to {filename}")
 
-def train_model(train_loader, val_loader, epochs=EPOCH_NUM):
+def train_model(train_loader, val_loader, num_classes, epochs=EPOCH_NUM):
     model = create_model(num_classes)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)

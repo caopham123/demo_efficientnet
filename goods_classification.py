@@ -4,7 +4,7 @@ import timm
 import torch.nn as nn
 from torchvision import transforms
 from PIL import Image   
-from main2 import create_model
+from train_classification_model import create_model
 from setting import *
 # from container_detection import detect_container_img, detect_container_video
 

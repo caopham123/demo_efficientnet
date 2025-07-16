@@ -1,0 +1,8 @@
+timm
+torch
+torchvision
+matplotlib
+tqdm
+opencv-python
+ultralytics
+pillow
