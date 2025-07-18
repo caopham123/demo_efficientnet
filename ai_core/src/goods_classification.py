@@ -3,7 +3,8 @@ import torch
 import timm
 import torch.nn as nn
 from torchvision import transforms
-from PIL import Image   
+from PIL import Image
+import numpy as np   
 from setting import *
 from container_detection import ContainerDetection
 
@@ -44,11 +45,13 @@ class GoodsClassification:
         class_name = str(class_name).replace('_', ' ')
         return class_name
 
-    def classify_goods_img(self, img_path):
-        display_pic, cropped_pic, label_container = self.detection.detect_container_img(img_path)
+    def classify_goods_img(self, img_input):
+        if self.detection.detect_container(img_input) is None:
+            print("Detection is None")
+            return None
+        
+        display_pic, cropped_pic, label_container = self.detection.detect_container(img_input)
         display_pic = cv2.resize(display_pic,(800, 600))
-        h, w = display_pic.shape[:2]
-
         model, class_to_idx = self.load_classification_model()
 
         pil_img = Image.fromarray(cv2.cvtColor(cropped_pic, cv2.COLOR_BGR2RGB))
@@ -59,7 +62,7 @@ class GoodsClassification:
             outputs = model(input_tensor)
             probability = nn.functional.softmax(outputs[0], dim=0)
             best_prob, best_class = torch.max(probability, 0)
-        print(f"Best prob: {best_prob}\nMatch class idx: {best_class}")
+        # print(f"Best prob: {best_prob} ==== Match class idx: {best_class}")
 
         # Get class name and confidence
         class_name = self.get_class_name(best_class.item(), class_to_idx)
@@ -69,8 +72,11 @@ class GoodsClassification:
 
         return display_pic, goods_label, label_container
 
-    def display_pred_picture(self, img_path):
-        display_pic, goods_label, container_label = self.classify_goods_img(img_path)
+    def show_classified_img(self, img_input):
+        display_pic, goods_label, container_label = self.classify_goods_img(img_input)
+        if display_pic is None:
+            print("Not classify goods")
+            return None
         # Display prediction on frame
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = .6
@@ -80,17 +86,16 @@ class GoodsClassification:
         combined_label = f"{container_label} | {goods_label}" if container_label != "het hang" else container_label
 
         print(f"label: {goods_label}")
-        cv2.putText(display_pic, combined_label, (margin, margin), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
-        # cv2.putText(display_pic, goods_label, (x, y), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
+        display_pic = cv2.putText(display_pic, combined_label, (margin, margin*2), fontFace=font
+                                  ,fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
         
-        cv2.imshow('Classify goods', display_pic)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-
-    # def classify_goods_video(self, video_path):
+        # cv2.imshow('Classify goods', display_pic)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
+        return display_pic
 
 if __name__ == "__main__":
     goods_classification = GoodsClassification()
     # classify_goods_video("./data/video_01.mp4")
-    goods_classification.display_pred_picture('./data/img11.jpg')
+    goods_classification.show_classified_img('./data/img11.jpg')
     print("Done")

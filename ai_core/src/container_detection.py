@@ -6,30 +6,73 @@ import torch.nn as nn
 from torchvision import transforms
 from PIL import Image   
 import time
-from setting import MODEL_DETECTION
+from setting import MODEL_DETECTION, CONF_DETECT_THRESH, RESULT_PATH
 
 MARGIN = 20
 model_file = os.path.join(MODEL_DETECTION, "best.pt")
 
 class ContainerDetection:
     def __init__(self):
-        self.model = YOLO(model_file.replace('\\', '/'))
+        self.model_detection = YOLO(model_file.replace('\\', '/'))
 
     def translate_label(self, idx_class):
         vn_lst_name = ["het hang", "con hang"]
         return vn_lst_name[idx_class]
 
-    def detect_container_img(self, img_path):
+    def detect_container(self, img_input):
+        if img_input is None: 
+            print("Not found input img")
+            return None
+        
+        pic = img_input
+        print(type(pic))
+
+        results = self.model_detection(pic)
+        if results[0] is None:
+            print("Not found detection")
+            # return None
+
+        confidience_lst = results[0].boxes.conf
+        if len(confidience_lst) == 0: 
+            print("Not found confidiences")
+            return None
+        
+        print(f"Found {len(confidience_lst)} confidience")
+        max_idx= 0
+        for idx in range (len(confidience_lst)):
+            if (confidience_lst[idx] > confidience_lst[max_idx] 
+                and confidience_lst[idx]> CONF_DETECT_THRESH):
+                max_idx= idx
+        
+        max_bbox= results[0].boxes[max_idx]
+        x1,y1,y2,x2 = map(int, max_bbox.xyxy[0])
+        class_id= int(max_bbox.cls[0])
+        class_name= self.translate_label(class_id)
+        conf_score= float(max_bbox.conf[0])
+        conf_score= round(conf_score* 100, 2)
+
+        cropped_pic= pic[y1-MARGIN : y2+MARGIN, x1-MARGIN : x2+MARGIN]
+        if cropped_pic.size == 0:
+            return None
+        display_pic = cv2.rectangle(pic, (x1, y1), (x2, y2), (100,50,200), 1)
+        cropped_pic = cv2.resize(cropped_pic, (600, 400))
+        return display_pic, cropped_pic, class_name
+
+    def detect_container_2(self, img_path):
         pic = cv2.imread(img_path)
-        results = self.model(pic)
+
+        results = self.model_detection(pic)
+        if results is None:
+            print("Not found detection")
+            return None
 
         for box in results[0].boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
 
             # Get class ID: 0, 1, 2
-            cls_id = int(box.cls[0]) 
+            class_id = int(box.cls[0]) 
             # Get class name & score
-            cls_name = self.translate_label(cls_id)
+            class_name = self.translate_label(class_id)
             conf = float(box.conf[0])
             conf = round(conf*100., 2)
 
@@ -37,130 +80,7 @@ class ContainerDetection:
             cropped_pic = pic[y1-MARGIN : y2+MARGIN, x1-MARGIN : x2+MARGIN]
 
         cropped_pic = cv2.resize(cropped_pic, (600, 400))
-        return display_pic, cropped_pic, cls_name
-
-# def real_time_video(url, iterval = 0.1):
-#     model_classification, class_to_idx = load_model_classification()
-
-#     cap = cv2.VideoCapture(url)
-#     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-#     frame_order = 0
-
-#     if not cap.isOpened():
-#         print("Not play video")
-#         return None
-    
-#     while cap.isOpened():
-#         last_time = time.perf_counter()
-#         ret, pic = cap.read()
-#         if not ret: break
-
-#         if frame_order % SKIP_FRAME != 0:
-#             frame_order += 1
-#             continue
-            
-#         ### =========== BEGIN PROCESSING FRAME ==============
-#         # ======   CONFIGURE    ===========
-#         print(f"\n\n==============\n Frame {frame_order}")
-#         h, w = pic.shape[:2]
-#         w_begin = int(w/4)
-#         w_end = int(w* 0.9) + MARGIN
-#         print(f"line {w_begin}-{w_end}")
-#         display_pic = pic.copy()
-#         cv2.line(display_pic, (w_begin, 0), (w_begin, h), (0,255,255),2)
-#         cv2.line(display_pic, (w_end, 0), (w_end, h), (0,255,255),2)
-#         font = cv2.FONT_HERSHEY_SIMPLEX
-#         font_scale = .7
-#         thickness = 2
-
-#         # ======   LOAD DETECTION MODEL    ===========
-#         results = model_detection(pic)
-#         confidiences = results[0].boxes.conf
-
-#         # ====== FOUND THE BBOX WITH MAX CONFIDIENCE ===========
-#         max_idx = 0
-#         num_confidiences = len(confidiences)
-#         print(f"num_confd: {num_confidiences}")
-#         if num_confidiences == 0: continue
-
-#         for idx in range (num_confidiences):
-#             print(f"    idx: {idx} - {confidiences[idx]}")
-#             if confidiences[idx] > confidiences[max_idx] and confidiences[idx] > CONF_DETECT_THRESH:
-#                 max_idx = idx
-#         max_bbox = results[0].boxes[max_idx]
-#         x1, y1, x2, y2 = map(int, max_bbox.xyxy[0])
-#         print(f"x1, y1, x2, y2 {x1, y1, x2, y2}")
-#         # =================================
-        
-#         # Get class_name for ROI container
-#         cls_id = int(max_bbox.cls[0])
-#         container_label = translate_label(cls_id)
-#         conf_detection = float(max_bbox.conf[0])
-
-#         # Draw bounding box
-#         cv2.rectangle(display_pic, (x1, y1), (x2, y2), (0, 255, 0), 2)
-#         x1 = max(0, x1 - MARGIN)
-#         y1 = max(0, y1 - MARGIN)
-#         x2 = min(w, x2 + MARGIN)
-#         y2 = min(h, y2 + MARGIN)
-#         cropped_pic = pic[y1: y2, x1: x2]
-#         if cropped_pic.size == 0: 
-#             print("Warning: Empty crop detected!")
-#             continue            
-
-#         # ===== PROCESS IN CASE OF EMPTY CONTAINER ==========
-#         if container_label == "het hang":
-#             cv2.putText(display_pic, container_label, (x1, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness) 
-#             continue
-
-#         # ===== PROCESS IN CASE OF NOT EMPTY CONTAINER ==========
-#         # Requirement:
-#         # 1. If edges's container over line w_begin and w_end
-#         # Beginning Image Classification
-#         # 2. After classification, hold 6-10 frames to get certain result (label_score)
-#         if x1 >= w_begin and x2 >= w_end : 
-#             print(f"  ======== BEGIN CLASSIFICATION =========")
-#             pil_img = Image.fromarray(cv2.cvtColor(cropped_pic, cv2.COLOR_BGR2RGB))
-#             input_tensor = preprocess_image(pil_img)
-#             # Inference
-#             with torch.no_grad():
-#                 outputs = model_classification(input_tensor)
-#                 probability = nn.functional.softmax(outputs[0], dim=0)
-#                 best_prob, best_class = torch.max(probability, 0)
-
-#             # Get class name and confidence
-#             goods_name = get_class_name(best_class.item(), class_to_idx)
-#             conf_goods = round(best_prob.item()*100., 2)
-#             goods_label = f"{goods_name}: {conf_goods}%" if container_label != "het hang" else ""
-#             print(f"label_classification: {goods_label}")
-
-#             # Display prediction on frame
-#             (label_w,_), _ = cv2.getTextSize(goods_label, font, font_scale, thickness)
-#             cv2.putText(display_pic, container_label, (x1, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
-#             cv2.putText(display_pic, goods_label, (x2 - label_w, y1), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
-#             print(f"  ======== END CLASSIFICATION =========")
-#         # ===========================
-        
-#         # Display the resulting frame
-#         resized_pic = cv2.resize(display_pic, (800, 600))
-#         cv2.imshow('Classify goods', resized_pic)
-
-#         ## After for loop
-#         process_time = time.perf_counter() - last_time
-#         remain_time = max(0, iterval - process_time)
-#         print(f"pro_time: {process_time}")
-#         print(f"remain_time: {remain_time}")
-
-#         if remain_time > 0:
-#             key = cv2.waitKey(int(remain_time*1000))
-#         else:
-#             key = cv2.waitKey(1)
-        
-#         if key == ord('q'): break
-#         frame_order += 1
-#     ### ========== END PROCESSING FRAME =============
-#     cap.release()
-#     cv2.destroyAllWindows()
+        return display_pic, cropped_pic, class_name
 
 
 # def detect_container_video(url):
@@ -203,9 +123,7 @@ class ContainerDetection:
 #     cv2.destroyAllWindows()
 #     # return resized_pic, cropped_pic, cls_name
 
-# if __name__ == "__main__":
-#     container = ContainerDetection()
-#     container.display_detection("./data/img10.jpg")
-#   real_time_video("rtsp://admin:longson2016@192.168.10.26:1555/Streaming/Channels/5002")
-#   real_time_video("./data/25_07_16_12_5.mp4")
-#   detect_container_video("./data/video_02.mp4")
+if __name__ == "__main__":
+    container = ContainerDetection()
+    # real_time_video("rtsp://admin:longson2016@192.168.10.26:1555/Streaming/Channels/5002")
+    # real_time_video("./data/25_07_16_12_5.mp4")
