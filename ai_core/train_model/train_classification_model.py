@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader     # For iterating through data
 from tqdm import tqdm
-from setting import *
+from ai_core.src.setting import *
 import torch.nn.functional as F
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"

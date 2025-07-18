@@ -1,0 +1,96 @@
+import cv2, os
+import torch
+import timm
+import torch.nn as nn
+from torchvision import transforms
+from PIL import Image   
+from setting import *
+from container_detection import ContainerDetection
+
+class GoodsClassification:
+
+    def __init__(self):
+        self.detection = ContainerDetection()
+
+    # ----- CREATE MODEL & LOAD WEIGHTS ------
+    def load_classification_model(self):
+        self.checkpoint = torch.load(os.path.join(MODEL_CLASSIFICATION,'best.pt').replace('\\','/')
+                                , map_location=DEVICE)
+        print(f"cls_to_idx: {self.checkpoint['class_to_idx']}")
+        self.num_classes = len(self.checkpoint['class_to_idx'])
+
+        self.model = timm.create_model(
+                model_name=MODEL_NAME, pretrained=False
+                ,num_classes = self.num_classes)
+        self.model.to(DEVICE)
+
+        self.model.load_state_dict(self.checkpoint['state_dict'])
+        self.model.eval()
+        return self.model, self.checkpoint['class_to_idx']
+    # --------------------------------
+
+    def preprocess_image(self, image):
+        self.transform = transforms.Compose([
+            transforms.Resize((IMG_SIZE, IMG_SIZE)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        return self.transform(image).unsqueeze(0).to(DEVICE)
+
+    def get_class_name(self, class_idx, class_to_idx: dict):
+        # Convert class key to index key
+        idx_to_class = {int(v): k for k, v in class_to_idx.items()}
+        class_name = idx_to_class.get(int(class_idx), "Ko_xac_dinh")
+        class_name = str(class_name).replace('_', ' ')
+        return class_name
+
+    def classify_goods_img(self, img_path):
+        display_pic, cropped_pic, label_container = self.detection.detect_container_img(img_path)
+        display_pic = cv2.resize(display_pic,(800, 600))
+        h, w = display_pic.shape[:2]
+
+        model, class_to_idx = self.load_classification_model()
+
+        pil_img = Image.fromarray(cv2.cvtColor(cropped_pic, cv2.COLOR_BGR2RGB))
+        input_tensor = self.preprocess_image(pil_img)
+
+        # Inference image
+        with torch.no_grad():
+            outputs = model(input_tensor)
+            probability = nn.functional.softmax(outputs[0], dim=0)
+            best_prob, best_class = torch.max(probability, 0)
+        print(f"Best prob: {best_prob}\nMatch class idx: {best_class}")
+
+        # Get class name and confidence
+        class_name = self.get_class_name(best_class.item(), class_to_idx)
+        confidence = best_prob.item()*100.
+        confidence = round(confidence, 2)
+        goods_label = f"{class_name}: {confidence}%"
+
+        return display_pic, goods_label, label_container
+
+    def display_pred_picture(self, img_path):
+        display_pic, goods_label, container_label = self.classify_goods_img(img_path)
+        # Display prediction on frame
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = .6
+        thickness = 2
+        margin = 10
+
+        combined_label = f"{container_label} | {goods_label}" if container_label != "het hang" else container_label
+
+        print(f"label: {goods_label}")
+        cv2.putText(display_pic, combined_label, (margin, margin), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
+        # cv2.putText(display_pic, goods_label, (x, y), fontFace=font, fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
+        
+        cv2.imshow('Classify goods', display_pic)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    # def classify_goods_video(self, video_path):
+
+if __name__ == "__main__":
+    goods_classification = GoodsClassification()
+    # classify_goods_video("./data/video_01.mp4")
+    goods_classification.display_pred_picture('./data/img11.jpg')
+    print("Done")

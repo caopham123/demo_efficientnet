@@ -1,4 +1,6 @@
 import os
+import torch
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_NAME = "tf_efficientnetv2_s"
 DATASET_PATH = "dataset"
 CHECKPOINT_DIR = "checkpoints"
