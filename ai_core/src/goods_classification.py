@@ -1,12 +1,11 @@
 import cv2, os
-import torch
-import timm
+import torch, timm
 import torch.nn as nn
 from torchvision import transforms
 from PIL import Image
 import numpy as np   
-from setting import *
-from container_detection import ContainerDetection
+from ai_core.src.setting import *
+from ai_core.src.container_detection import ContainerDetection
 
 class GoodsClassification:
 
@@ -46,31 +45,33 @@ class GoodsClassification:
         return class_name
 
     def classify_goods_img(self, img_input):
-        if self.detection.detect_container(img_input) is None:
+        if self.detection.detect_container_by_path(img_input) is None:
             print("Detection is None")
             return None
         
-        display_pic, cropped_pic, label_container = self.detection.detect_container(img_input)
-        display_pic = cv2.resize(display_pic,(800, 600))
         model, class_to_idx = self.load_classification_model()
+        display_pic, cropped_pic_lst, container_label_lst = self.detection.detect_container_by_path(img_input)
+        number_boxes= len(cropped_pic_lst)
 
-        pil_img = Image.fromarray(cv2.cvtColor(cropped_pic, cv2.COLOR_BGR2RGB))
-        input_tensor = self.preprocess_image(pil_img)
+        goods_label_lst= []
+        for i in range(number_boxes):
+            pil_img = Image.fromarray(cv2.cvtColor(cropped_pic_lst[i], cv2.COLOR_BGR2RGB))
+            input_tensor = self.preprocess_image(pil_img)
 
-        # Inference image
-        with torch.no_grad():
-            outputs = model(input_tensor)
-            probability = nn.functional.softmax(outputs[0], dim=0)
-            best_prob, best_class = torch.max(probability, 0)
-        # print(f"Best prob: {best_prob} ==== Match class idx: {best_class}")
+            # Inference image
+            with torch.no_grad():
+                outputs = model(input_tensor)
+                probability = nn.functional.softmax(outputs[0], dim=0)
+                best_prob, best_class = torch.max(probability, 0)
+            # print(f"Best prob: {best_prob} ==== Match class idx: {best_class}")
 
-        # Get class name and confidence
-        class_name = self.get_class_name(best_class.item(), class_to_idx)
-        confidence = best_prob.item()*100.
-        confidence = round(confidence, 2)
-        goods_label = f"{class_name}: {confidence}%"
+            # Get class name and confidence
+            class_name = self.get_class_name(best_class.item(), class_to_idx)
+            confidence = best_prob.item()*100.
+            confidence = round(confidence, 2)
+            goods_label_lst.append(f"{class_name}: {confidence}%")
 
-        return display_pic, goods_label, label_container
+        return display_pic, goods_label_lst, container_label_lst
 
     def show_classified_img(self, img_input):
         display_pic, goods_label, container_label = self.classify_goods_img(img_input)
@@ -85,17 +86,17 @@ class GoodsClassification:
 
         combined_label = f"{container_label} | {goods_label}" if container_label != "het hang" else container_label
 
-        print(f"label: {goods_label}")
-        display_pic = cv2.putText(display_pic, combined_label, (margin, margin*2), fontFace=font
+        # print(f"label: {goods_label}")
+        display_pic= cv2.putText(display_pic, combined_label, (margin, margin*2), fontFace=font
                                   ,fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
         
-        # cv2.imshow('Classify goods', display_pic)
-        # cv2.waitKey(0)
-        # cv2.destroyAllWindows()
+        cv2.imshow('Classify goods', display_pic)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         return display_pic
 
 if __name__ == "__main__":
     goods_classification = GoodsClassification()
     # classify_goods_video("./data/video_01.mp4")
-    goods_classification.show_classified_img('./data/img11.jpg')
+    goods_classification.show_classified_img('./data/img02.jpg')
     print("Done")

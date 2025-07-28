@@ -9,3 +9,5 @@ pillow
 ultralytics
 psycopg2
 fastapi
+uvicorn
+fastapi
