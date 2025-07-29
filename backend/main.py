@@ -12,9 +12,11 @@ import logging
 logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 app = FastAPI(
-    title = 'FACE RECOGNIZE',
+    title = 'GOODS RECOGINITION',
     description = "This API was built with FastAPI",
     version = "1.0.0",
+    docs_url= "/docs",
+    redoc_url= "/redoc",
 )
 origins = ["*"]
 app.add_middleware(

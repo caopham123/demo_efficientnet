@@ -19,5 +19,26 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  backend:
+    build: ./backend
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/db_goods_prediction
+    networks:
+      - app-network
+    ports:
+      - "5055:5055"
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3000:80"
+    networks:
+      - app-network
 volumes:
   postgres_data:
+
+networks:
+  app-network:
