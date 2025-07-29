@@ -44,21 +44,26 @@ class GoodsClassification:
         class_name = str(class_name).replace('_', ' ')
         return class_name
 
-    def classify_goods_img(self, img_input):
+    def classify_goods_img(self, img_input:str):
         if self.detection.detect_container_by_path(img_input) is None:
             print("Detection is None")
             return None
         
         model, class_to_idx = self.load_classification_model()
-        display_pic, cropped_pic_lst, container_label_lst = self.detection.detect_container_by_path(img_input)
+        display_pic, cropped_pic_lst, container_label_lst, container_score_lst = self.detection.detect_container_by_path(img_input)
         number_boxes= len(cropped_pic_lst)
 
         goods_label_lst= []
+        goods_score_lst= []
         for i in range(number_boxes):
+            if container_label_lst[i] == "het hang":
+                goods_label_lst.append("het hang")
+                goods_score_lst.append(container_score_lst[i])
+                
             pil_img = Image.fromarray(cv2.cvtColor(cropped_pic_lst[i], cv2.COLOR_BGR2RGB))
             input_tensor = self.preprocess_image(pil_img)
 
-            # Inference image
+            # Inference goods image
             with torch.no_grad():
                 outputs = model(input_tensor)
                 probability = nn.functional.softmax(outputs[0], dim=0)
@@ -69,31 +74,32 @@ class GoodsClassification:
             class_name = self.get_class_name(best_class.item(), class_to_idx)
             confidence = best_prob.item()*100.
             confidence = round(confidence, 2)
-            goods_label_lst.append(f"{class_name}: {confidence}%")
+            goods_label_lst.append(class_name)
+            goods_score_lst.append(confidence)
 
-        return display_pic, goods_label_lst, container_label_lst
+        return display_pic, goods_label_lst, goods_score_lst
 
-    def show_classified_img(self, img_input):
-        display_pic, goods_label, container_label = self.classify_goods_img(img_input)
-        if display_pic is None:
-            print("Not classify goods")
-            return None
-        # Display prediction on frame
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = .6
-        thickness = 2
-        margin = 10
+    # def show_classified_img(self, img_input):
+    #     display_pic, goods_label, container_label = self.classify_goods_img(img_input)
+    #     if display_pic is None:
+    #         print("Not classify goods")
+    #         return None
+    #     # Display prediction on frame
+    #     font = cv2.FONT_HERSHEY_SIMPLEX
+    #     font_scale = .6
+    #     thickness = 2
+    #     margin = 10
 
-        combined_label = f"{container_label} | {goods_label}" if container_label != "het hang" else container_label
+    #     combined_label = f"{container_label} | {goods_label}" if container_label != "het hang" else container_label
 
-        # print(f"label: {goods_label}")
-        display_pic= cv2.putText(display_pic, combined_label, (margin, margin*2), fontFace=font
-                                  ,fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
+    #     # print(f"label: {goods_label}")
+    #     display_pic= cv2.putText(display_pic, combined_label, (margin, margin*2), fontFace=font
+    #                               ,fontScale=font_scale, color=(0, 255, 0), thickness=thickness)
         
-        cv2.imshow('Classify goods', display_pic)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
-        return display_pic
+    #     cv2.imshow('Classify goods', display_pic)
+    #     cv2.waitKey(0)
+    #     cv2.destroyAllWindows()
+    #     return display_pic
 
 if __name__ == "__main__":
     goods_classification = GoodsClassification()

@@ -5,6 +5,7 @@ import torch.nn as nn
 from torchvision import transforms
 from PIL import Image   
 from ai_core.src.setting import MODEL_DETECTION, CONF_DETECT_THRESH, RESULT_PATH
+from api.helpers.commons import stringToRGB
 
 MARGIN = 20
 model_file = os.path.join(MODEL_DETECTION, "best.pt")
@@ -56,8 +57,9 @@ class ContainerDetection:
         cropped_pic = cv2.resize(cropped_pic, (600, 400))
         return display_pic, cropped_pic, class_name
 
-    def detect_container_by_path(self, img_path):
-        pic= cv2.imread(img_path)
+    def detect_container_by_path(self, img_str:str):
+        # pic= cv2.imread(img_path.replace("\\","/"))
+        pic= stringToRGB(img_str)
         pic= cv2.resize(pic, (800, 550))
         h, w= pic.shape[:2]
         results = self.model_detection(pic)
@@ -68,6 +70,7 @@ class ContainerDetection:
         display_pic= pic.copy()
         cropped_pic_lst= []
         container_label_lst= []
+        container_score_lst= []
 
         for box in results[0].boxes:
             x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -86,9 +89,10 @@ class ContainerDetection:
 
             cropped_pic_lst.append(cropped_pic)
             container_label_lst.append(class_name)
+            container_score_lst.append(conf)
 
-        return display_pic, cropped_pic_lst, container_label_lst
+        return display_pic, cropped_pic_lst, container_label_lst, container_score_lst
 
 if __name__ == "__main__":
     container = ContainerDetection()
-    container.detect_container_by_path("D:\LONGSON\PROJECTS\demo_efficientnet\data\img15.jpg".replace("\\","/"))
+    container.detect_container_by_path("D:\LONGSON\PROJECTS\demo_efficientnet\data\img15.jpg")

@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
-class PredictionMaking(BaseModel):
+class PredictionMaking2(BaseModel):
     product: str= Field(examples="coal")
     score: float= Field(examples=80.)
     created_at: datetime= Field(examples='2021-09-02 07:00:00')
@@ -16,6 +16,13 @@ class PredictionMaking(BaseModel):
             "created_at": '2021-09-02 07:00:00',
             "modified_at": '2021-09-02 07:00:00',
             'is_delete': False,
+            "image": "base64"
+        }
+
+class PredictionMaking(BaseModel):
+    image: str= Field(examples='base64')
+    class Config:
+        json_schema_extra = {
             "image": "base64"
         }
 
