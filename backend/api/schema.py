@@ -3,12 +3,12 @@ from typing import Optional
 from datetime import datetime
 
 class PredictionMaking2(BaseModel):
-    product: str= Field(examples="coal")
-    score: float= Field(examples=80.)
-    created_at: datetime= Field(examples='2021-09-02 07:00:00')
-    modified_at: datetime= Field(examples='2021-09-02 07:00:00')
-    is_delete: bool= Field(examples=False)
-    image: str= Field(examples='base64')
+    product: str= Field(...,  example="coal")
+    score: float= Field(...,  example=80.)
+    created_at: datetime= Field(...,  example='2021-09-02 07:00:00')
+    modified_at: datetime= Field(...,  example='2021-09-02 07:00:00')
+    is_delete: bool= Field(...,  example=False)
+    image: str= Field(...,  example="base64")
     class Config:
         json_schema_extra = {
             "product": "coal",
@@ -19,12 +19,8 @@ class PredictionMaking2(BaseModel):
             "image": "base64"
         }
 
-class PredictionMaking(BaseModel):
-    image: str= Field(examples='base64')
-    class Config:
-        json_schema_extra = {
-            "image": "base64"
-        }
+class Image(BaseModel):
+    image: str = Field(..., example="base64-encoded-image")
 
 class PredictionModification(BaseModel):
     product: Optional[str]

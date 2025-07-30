@@ -8,11 +8,11 @@ from ai_core.src.setting import MODEL_DETECTION, CONF_DETECT_THRESH, RESULT_PATH
 from api.helpers.commons import stringToRGB
 
 MARGIN = 20
-model_file = os.path.join(MODEL_DETECTION, "best.pt")
+model_file = os.path.join(MODEL_DETECTION, "best.pt").replace('\\', '/')
 
 class ContainerDetection:
     def __init__(self):
-        self.model_detection = YOLO(model_file.replace('\\', '/'))
+        self.model_detection = YOLO(model_file)
 
     def translate_label(self, idx_class):
         vn_lst_name = ["het hang", "con hang"]
@@ -63,7 +63,7 @@ class ContainerDetection:
         pic= cv2.resize(pic, (800, 550))
         h, w= pic.shape[:2]
         results = self.model_detection(pic)
-        if results is None:
+        if len(results[0].boxes) ==0:
             print("Not found detection")
             return None
 

@@ -1,4 +1,4 @@
-from api.schema import PredictionMaking, PredictionModification
+from api.schema import Image, PredictionModification
 from api.services.prediction_service import PredictionService
 from api.helpers.commons import stringToRGB
 from fastapi import status, APIRouter
@@ -16,5 +16,5 @@ async def ping():
     return JSONResponse(status_code=status.HTTP_200_OK, content={"message":"pong"})
 
 @router.post("/predict")
-async def create_new_predict(item: PredictionMaking):
+async def create_new_predict(item: Image):
     return prediction.create_prediction(item.image)

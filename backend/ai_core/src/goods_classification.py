@@ -45,12 +45,13 @@ class GoodsClassification:
         return class_name
 
     def classify_goods_img(self, img_input:str):
-        if self.detection.detect_container_by_path(img_input) is None:
+        result= self.detection.detect_container_by_path(img_input)
+        if result is None:
             print("Detection is None")
             return None
         
         model, class_to_idx = self.load_classification_model()
-        display_pic, cropped_pic_lst, container_label_lst, container_score_lst = self.detection.detect_container_by_path(img_input)
+        display_pic, cropped_pic_lst, container_label_lst, container_score_lst= self.detection.detect_container_by_path(img_input)
         number_boxes= len(cropped_pic_lst)
 
         goods_label_lst= []

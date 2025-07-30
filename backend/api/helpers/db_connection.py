@@ -22,8 +22,6 @@ class QueryMember:
         try:
             conn= self.get_db_connection()
             cursor= conn.cursor()
-            # created_at= datetime.now()
-            # modified_at= datetime.now()
             inserted_query= """
             INSERT INTO prediction (production, score, image)
             VALUES (%s, %s, %s)
