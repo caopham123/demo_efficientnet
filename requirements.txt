@@ -6,3 +6,8 @@ tqdm
 opencv-python
 ultralytics
 pillow
+ultralytics
+psycopg2
+fastapi
+uvicorn
+fastapi
